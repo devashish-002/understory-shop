@@ -8,6 +8,7 @@ const path = require('node:path');
 const bcrypt = require('bcryptjs');
 const cookieSession = require('cookie-session');
 const express = require('express');
+const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const Database = require('better-sqlite3');
@@ -114,6 +115,7 @@ const completeCheckout = database.transaction((userId, order, items, payment) =>
 
 app.disable('x-powered-by');
 app.set('trust proxy', isProduction ? 1 : false);
+app.use(cors());
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -220,6 +222,14 @@ function isValidRazorpaySignature(orderId, paymentId, signature) {
 
 app.get('/api/health', (request, response) => {
   response.json({ status: 'ok', database: 'ok', payments: razorpay ? 'configured' : 'demo' });
+});
+
+app.get('/products', (request, response) => {
+  response.json([
+    { id: 1, name: 'Rose Plant', price: 150 },
+    { id: 2, name: 'Money Plant', price: 100 },
+    { id: 3, name: 'Aloe Vera', price: 120 }
+  ]);
 });
 
 app.get('/api/products', (request, response) => {
