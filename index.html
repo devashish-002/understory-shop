@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Understory | Plant Shop</title>
+    <meta
+      name="description"
+      content="Understory is a demo plant shop with a product grid, filters, detail modal, and cart drawer."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div class="brand" aria-label="Understory home">
+          <span class="brand-mark">U</span>
+          <div>
+            <p class="eyebrow">Understory</p>
+            <h1>Plant Shop</h1>
+          </div>
+        </div>
+
+        <nav class="top-actions" aria-label="Main shopping controls">
+          <label class="search-shell" for="productSearch" aria-label="Search products">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input id="productSearch" type="search" placeholder="Search plants" autocomplete="off" />
+          </label>
+          <button class="secondary-btn" type="button" id="shopNowBtn">Shop now</button>
+          <a class="secondary-btn" id="accountLink" href="login.html">Sign in</a>
+          <button class="secondary-btn" type="button" id="logoutBtn" hidden>Sign out</button>
+          <button class="secondary-btn" type="button" id="ordersToggle" aria-controls="ordersDrawer" aria-expanded="false">My orders</button>
+          <button class="cart-trigger" type="button" id="cartToggle" aria-label="Open cart">
+            Cart
+            <span class="cart-badge" id="cartCountBadge">0</span>
+          </button>
+        </nav>
+      </header>
+
+      <main class="page-content">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow accent">Small-space living</p>
+            <h2>Bring home calmer corners.</h2>
+            <p>
+              Thoughtful plants and easy-care essentials for sunrooms, shelves, and the
+              little nooks that need a little more life.
+            </p>
+            <div class="hero-actions">
+              <button class="primary-btn" type="button" id="scrollToProducts">Browse collection</button>
+              <button class="ghost-btn" type="button" id="findGiftBtn">Gift picks</button>
+            </div>
+          </div>
+
+          <div class="hero-visual" aria-hidden="true">
+            <img
+              class="low-water-image"
+              src="https://images.unsplash.com/photo-1463320726281-696a485928c7?auto=format&fit=crop&w=900&q=80"
+              alt="Low-water favorite succulent plant"
+            />
+            <div class="display-card card-one"></div>
+            <div class="display-card card-two"></div>
+            <div class="feature-badge">
+              <span>New</span>
+              <strong>Low-water favorites</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="catalog" id="catalogSection">
+          <div class="catalog-header">
+            <div>
+              <p class="eyebrow accent">Curated collection</p>
+              <h3>Shop indoor greens</h3>
+            </div>
+            <div class="toolbar">
+              <div class="filter-group" id="filterGroup" aria-label="Filter products by category"></div>
+              <label class="sort-control" for="sortSelect">
+                <span>Sort by</span>
+                <select id="sortSelect" aria-label="Sort products">
+                  <option value="featured">Featured</option>
+                  <option value="low-to-high">Price: Low to high</option>
+                  <option value="high-to-low">Price: High to low</option>
+                  <option value="az">A–Z</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="product-grid" id="productGrid" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <aside class="cart-drawer" id="cartDrawer" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <p class="eyebrow accent">Your cart</p>
+          <h3>Selected plants</h3>
+        </div>
+        <button class="close-btn" type="button" id="closeCartBtn" aria-label="Close cart">×</button>
+      </div>
+
+      <div class="cart-list" id="cartItems"></div>
+
+      <div class="drawer-footer">
+        <div class="totals">
+          <span>Subtotal</span>
+          <strong id="subtotalValue">₹</strong>
+        </div>
+        <div class="cart-summary-meta">
+          <span id="cartSummaryCount">0 items</span>
+        </div>
+        <button class="primary-btn checkout-btn" type="button" id="checkoutBtn">Checkout</button>
+      </div>
+    </aside>
+
+    <aside class="orders-drawer" id="ordersDrawer" aria-hidden="true" aria-labelledby="ordersTitle">
+      <div class="drawer-header">
+        <div>
+          <p class="eyebrow accent">Your account</p>
+          <h3 id="ordersTitle">My orders</h3>
+        </div>
+        <button class="close-btn" type="button" id="closeOrdersBtn" aria-label="Close orders">×</button>
+      </div>
+      <div class="orders-list" id="ordersList" aria-live="polite"></div>
+      <p class="orders-note">Order history is saved to your shop account.</p>
+    </aside>
+
+    <div class="modal" id="productModal" aria-hidden="true">
+      <button class="modal-backdrop" type="button" id="closeModalBackdrop" aria-label="Close product details"></button>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <button class="close-btn modal-close" type="button" id="closeModalBtn" aria-label="Close product details">×</button>
+        <div class="modal-media" id="modalMedia"></div>
+        <div class="modal-body">
+          <p class="eyebrow accent" id="modalCategory">Category</p>
+          <h4 id="modalTitle">Plant name</h4>
+          <div class="modal-price-row">
+            <strong id="modalPrice">₹</strong>
+            <span id="modalCare">Care</span>
+          </div>
+          <p id="modalBlurb"></p>
+          <div class="modal-actions">
+            <button class="primary-btn" type="button" id="modalAddToCart">Add to cart</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" aria-live="polite"></div>
+
+    <script src="products.js"></script>
+    <script src="api.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
