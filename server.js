@@ -96,6 +96,12 @@ const createPayment = database.prepare('INSERT INTO payments (id, user_id, order
 const createCheckoutSession = database.prepare('INSERT INTO checkout_sessions (razorpay_order_id, user_id, items_json, amount, created_at) VALUES (?, ?, ?, ?, ?)');
 const findCheckoutSession = database.prepare('SELECT razorpay_order_id AS razorpayOrderId, user_id AS userId, items_json AS itemsJson, amount, created_at AS createdAt FROM checkout_sessions WHERE razorpay_order_id = ? AND user_id = ?');
 const deleteCheckoutSession = database.prepare('DELETE FROM checkout_sessions WHERE razorpay_order_id = ? AND user_id = ?');
+const findOrderById = database.prepare('SELECT id, created_at AS createdAt, total FROM orders WHERE id = ? AND user_id = ?');
+const updateUserPassword = database.prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+const deleteUser = database.prepare('DELETE FROM users WHERE id = ?');
+const deleteExpiredCheckoutSessions = database.prepare(
+  "DELETE FROM checkout_sessions WHERE created_at < ?"
+);
 const completeCheckout = database.transaction((userId, order, items, payment) => {
   const { id: orderId, createdAt, total } = order;
   createOrder.run(orderId, userId, createdAt, total);
@@ -213,7 +219,20 @@ function isValidRazorpaySignature(orderId, paymentId, signature) {
 }
 
 app.get('/api/health', (request, response) => {
-  response.json({ status: 'ok' });
+  response.json({ status: 'ok', database: 'ok', payments: razorpay ? 'configured' : 'demo' });
+});
+
+app.get('/api/products', (request, response) => {
+  response.json({ products: PRODUCTS });
+});
+
+app.get('/api/products/:id', (request, response) => {
+  const productId = Number(request.params.id);
+  const product = PRODUCTS.find((item) => item.id === productId);
+  if (!product) {
+    return response.status(404).json({ error: 'Product not found.' });
+  }
+  response.json({ product });
 });
 
 app.get('/api/auth/me', (request, response) => {
@@ -270,6 +289,40 @@ app.post('/api/auth/login', authLimiter, async (request, response, next) => {
 });
 
 app.post('/api/auth/logout', (request, response) => {
+  request.session = null;
+  response.status(204).end();
+});
+
+app.patch('/api/auth/password', authLimiter, requireUser, async (request, response, next) => {
+  const currentPassword = request.body?.currentPassword;
+  const newPassword = request.body?.newPassword;
+
+  if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+    return response.status(400).json({ error: 'Enter both your current and new passwords.' });
+  }
+
+  const passwordBytes = Buffer.byteLength(newPassword, 'utf8');
+  if (passwordBytes < 10 || passwordBytes > 72) {
+    return response.status(400).json({ error: 'Use a password between 10 and 72 bytes.' });
+  }
+
+  try {
+    const user = findUserByEmail.get(request.user.email);
+    const passwordMatches = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!passwordMatches) {
+      return response.status(401).json({ error: 'The current password is incorrect.' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    updateUserPassword.run(passwordHash, request.user.id);
+    response.json({ message: 'Password updated.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/auth/account', requireUser, (request, response) => {
+  deleteUser.run(request.user.id);
   request.session = null;
   response.status(204).end();
 });
@@ -340,22 +393,48 @@ app.get('/api/orders', requireUser, (request, response) => {
   response.json({ orders });
 });
 
+app.get('/api/orders/:id', requireUser, (request, response) => {
+  const order = findOrderById.get(request.params.id, request.user.id);
+  if (!order) {
+    return response.status(404).json({ error: 'Order not found.' });
+  }
+  response.json({ order: { ...order, items: findOrderItems.all(order.id) } });
+});
+
+app.post('/api/checkout/cancel', requireUser, (request, response) => {
+  const orderId = request.body?.orderId;
+  if (typeof orderId !== 'string') {
+    return response.status(400).json({ error: 'Checkout order ID is required.' });
+  }
+
+  const result = deleteCheckoutSession.run(orderId, request.user.id);
+  response.json({ cancelled: result.changes > 0 });
+});
+
 app.post('/api/checkout/verify', requireUser, async (request, response, next) => {
   const isDemoCheckout = !razorpay && request.body?.demo === true;
 
   if (isDemoCheckout) {
-    const demoItems = Array.isArray(request.body?.items) ? request.body.items : [];
-    let items;
-
-    try {
-      items = validateOrderItems(demoItems);
-    } catch (error) {
-      return response.status(400).json({ error: error.message });
+    const demoOrderId = request.body?.orderId;
+    if (typeof demoOrderId !== 'string') {
+      return response.status(400).json({ error: 'Checkout order ID is required.' });
     }
 
-    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const checkoutSession = findCheckoutSession.get(demoOrderId, request.user.id);
+    if (!checkoutSession) {
+      return response.status(404).json({ error: 'Demo checkout session not found or already completed.' });
+    }
+
+    let items;
+    try {
+      items = JSON.parse(checkoutSession.itemsJson);
+    } catch (error) {
+      return response.status(500).json({ error: 'Saved checkout data is invalid.' });
+    }
+
+    const total = checkoutSession.amount;
     const order = {
-      id: request.body?.orderId || `demo_order_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`,
+      id: demoOrderId,
       createdAt: new Date().toISOString(),
       total,
       items
@@ -461,16 +540,31 @@ app.use((error, request, response, next) => {
   response.status(500).json({ error: 'Something went wrong.' });
 });
 
-const server = app.listen(port, host, () => {
-  console.log(`Understory backend listening at http://${host}:${port}`);
-});
-
-function shutdown() {
-  server.close(() => {
-    database.close();
-    process.exit(0);
-  });
+deleteExpiredCheckoutSessions.run(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+const checkoutCleanup = setInterval(() => {
+  deleteExpiredCheckoutSessions.run(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+}, 60 * 60 * 1000);
+if (typeof checkoutCleanup.unref === 'function') {
+  checkoutCleanup.unref();
 }
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+let server;
+if (require.main === module) {
+  server = app.listen(port, host, () => {
+    console.log(`Understory backend listening at http://${host}:${port}`);
+  });
+
+  function shutdown() {
+    server.close(() => {
+      clearInterval(checkoutCleanup);
+      database.close();
+      process.exit(0);
+    });
+  }
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
+app.database = database;
+module.exports = app;
